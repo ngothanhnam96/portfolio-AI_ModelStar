@@ -1,0 +1,15 @@
+{
+  "name": "model-star",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Model Star - an original fashion styling and runway game for the browser.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

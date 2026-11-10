@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e8457a">
+  <meta name="description" content="Model Star — Sàn Diễn Mơ Ước: phối đồ theo chủ đề, sải bước trên sàn diễn và chinh phục ban giám khảo.">
+  <title>Model Star</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-screen="home">
+  <header class="hud">
+    <button class="brand" id="home-btn" title="Trang chủ"><span aria-hidden="true">✨</span> Model Star</button>
+    <div class="rank" id="rank"></div>
+    <div class="wallet">
+      <span class="pill" title="Tổng số sao"><span aria-hidden="true">⭐</span> <b id="stars">0</b></span>
+      <span class="pill" title="Xu"><span aria-hidden="true">🪙</span> <b id="coins">0</b></span>
+    </div>
+    <div class="actions">
+      <button class="icon-btn" id="music-btn" title="Nhạc nền (N)" aria-label="Nhạc nền">🎵</button>
+      <button class="icon-btn" id="sound-btn" title="Âm thanh (M)" aria-label="Âm thanh">🔊</button>
+    </div>
+  </header>
+
+  <!-- Home -->
+  <main class="screen screen-home" id="screen-home">
+    <div class="home-doll" id="home-doll"></div>
+    <div class="home-card">
+      <p class="eyebrow">Sàn Diễn Mơ Ước</p>
+      <h1>Model Star</h1>
+      <p class="lead">Phối đồ theo chủ đề, sải bước trên sàn diễn và chinh phục ba vị giám khảo khó tính. Từ người mẫu tập sự đến siêu mẫu!</p>
+      <div class="home-buttons">
+        <button class="btn primary" id="career-btn">👠 Sự nghiệp</button>
+        <button class="btn" id="free-btn">🪞 Phòng thay đồ tự do</button>
+        <button class="btn ghost" id="help-btn">❓ Cách chơi</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Career map -->
+  <main class="screen screen-career" id="screen-career">
+    <div class="career-head">
+      <h2>Lịch diễn</h2>
+      <p id="career-rank"></p>
+    </div>
+    <ol class="shows" id="shows"></ol>
+  </main>
+
+  <!-- Studio (dressing room) -->
+  <main class="screen screen-studio" id="screen-studio">
+    <section class="stage" id="stage">
+      <div class="stage-top">
+        <div class="theme" id="theme-label"></div>
+        <div class="timer" id="timer" role="timer" aria-label="Thời gian còn lại">
+          <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+          <span id="timer-text">0:00</span>
+        </div>
+      </div>
+      <div class="doll-wrap" id="doll-wrap"></div>
+      <div class="stage-actions">
+        <button class="btn small" id="brief-btn" title="Xem lại đề bài">📋 Đề bài</button>
+        <button class="btn small" id="hint-btn" title="Hỏi stylist">💡 Stylist <span class="cost">15🪙</span></button>
+        <button class="btn small" id="random-btn" title="Phối ngẫu nhiên">🎲 Ngẫu nhiên</button>
+        <button class="btn small" id="photo-btn" title="Lưu ảnh">📸 Ảnh</button>
+        <button class="btn primary" id="walk-btn">✨ Lên sàn diễn</button>
+      </div>
+    </section>
+
+    <section class="wardrobe" aria-label="Tủ đồ">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="tab-title" id="tab-title"></div>
+      <div class="items" id="items"></div>
+      <div class="swatches" id="swatches" aria-label="Màu"></div>
+    </section>
+  </main>
+
+  <!-- Runway -->
+  <main class="screen screen-runway" id="screen-runway">
+    <div class="runway" id="runway">
+      <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="crowd" aria-hidden="true"></div>
+      <div class="catwalk" aria-hidden="true"></div>
+      <div class="walker" id="walker"></div>
+      <div class="flashes" id="flashes" aria-hidden="true"></div>
+    </div>
+    <div class="judges" id="judges"></div>
+  </main>
+
+  <section class="overlay" id="overlay" role="dialog" aria-modal="true" hidden>
+    <div class="panel" id="panel"></div>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
