@@ -1,6 +1,6 @@
 # 04 · Testing
 
-`npm test` runs `node --test`: 49 tests in about 6 seconds, no dependencies.
+`npm test` runs `node --test`: 52 tests in about 6 seconds, no dependencies.
 
 ## Suites
 
@@ -14,7 +14,8 @@
 | `career.test.js` | New career, unlock rules, pay (first-time star bonus only once), stars never go down, rank-ups, buying, restoring junk saves |
 | `stylist.test.js` | Moves use only owned items, the hint always raises the score and never undresses, áo dài for Tết |
 | `proof.test.js` | **Every show 3★ with the full wardrobe; a full career from scratch with earned coins, no replays**; tee + jeans never 3★; the last shows need the shop |
-| `doll.test.js` | Mirror maths; every item in every colour renders well-formed SVG containing that colour; every item looks different; body options show; floor-length clothes over shoes; thumbnails cropped per slot |
+| `backdrops.test.js` | Every background is well-formed and fills its box; every show has one; gradient ids never repeat across pictures |
+| `doll.test.js` | Mirror maths; every item in every colour renders well-formed SVG containing that colour; every item looks different; body options show; floor-length clothes over shoes; thumbnails cropped per slot; gradients defined once per render with ids unique to each picture, thumbnail gradients inside their own `<svg>` |
 
 ## Browser end-to-end check (v0.1.0)
 

@@ -10,6 +10,7 @@ import {
   HINT_COST, applyResult, buy, isUnlocked, lockReason, restoreProgress, spend, totalStars,
 } from "./core/career.js";
 import { dollSVG, thumbSVG } from "./ui/doll.js";
+import { BACKDROPS, SHOW_BACKDROP, backdropSVG } from "./ui/backdrops.js";
 import { sfx, playMusic, stopMusic, setMuted, setMusic, isMuted, isMusicOn } from "./ui/audio.js";
 import { load, save } from "./ui/storage.js";
 import { initAnalytics, track } from "./ui/analytics.js";
@@ -18,6 +19,12 @@ const $ = (id) => document.getElementById(id);
 const DEBUG = new URLSearchParams(location.search).has("debug");
 
 const BODY_KEYS = ["skin", "hairColor", "eyes", "lips", "blush"];
+const MAX_OUTFITS = 6;
+
+/** 1–4 hearts by price: how rare (and how dazzling) an item is. */
+const rarity = (item) => (item.price === 0 ? 1 : item.price <= 70 ? 2 : item.price <= 130 ? 3 : 4);
+/** Lower-case, no Vietnamese diacritics: "Áo dài" → "ao dai". */
+const fold = (text) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase();
 
 let progress = restoreProgress(load("progress", null));
 let bodySettings = restoreBody(load("body", null));
@@ -34,6 +41,17 @@ let lastTick = 0;
 let lastResult = null;
 let skipRunway = false;
 let runwayToken = 0;
+/** Studio conveniences: undo history, search, saved outfits, chosen background (free mode). */
+let history = [];
+let searching = false;
+let query = "";
+let backdrop = BACKDROPS.some((b) => b.id === load("backdrop", "")) ? load("backdrop", "") : "bedroom";
+/** Saved outfits, re-validated: unknown or unaffordable items are dropped on load. */
+let outfits = (Array.isArray(load("outfits", null)) ? load("outfits", []) : [])
+  .filter((o) => o && typeof o.name === "string" && o.look && typeof o.look.items === "object")
+  .slice(0, MAX_OUTFITS)
+  .map((o) => ({ name: o.name.slice(0, 20), look: restoreLook(o.look, bodySettings) }));
+const MAX_HISTORY = 40;
 
 // Restoring saved data -------------------------------------------------------------------------------
 
@@ -116,6 +134,7 @@ function showHome() {
   stopTimer();
   mode = null;
   $("home-doll").innerHTML = dollSVG(freeLook);
+  $("home-bg").innerHTML = backdropSVG(backdrop);
   setScreen("home");
 }
 
@@ -218,22 +237,28 @@ function startFree() {
 
 function enterStudio() {
   document.body.dataset.mode = mode;
+  history = [];
+  closeSearch();
   if (mode === "career") {
     const show = SHOWS[showIndex];
-    $("theme-label").innerHTML = `<span aria-hidden="true">${show.icon}</span> ${show.name}`;
-    $("stage").style.setProperty("--a", show.stage[0]);
-    $("stage").style.setProperty("--b", show.stage[1]);
+    $("brief-btn").innerHTML = `<span aria-hidden="true">${show.icon}</span> ${show.name} <small>📋 Đề bài</small>`;
+    $("brief-btn").disabled = false;
+    $("stage-bg").innerHTML = backdropSVG(SHOW_BACKDROP[show.id], { snow: show.id === "winter" });
   } else {
-    $("theme-label").innerHTML = '<span aria-hidden="true">🪞</span> Phòng thay đồ tự do';
-    $("stage").style.setProperty("--a", "#ffe7ef");
-    $("stage").style.setProperty("--b", "#f4d7ff");
+    $("brief-btn").innerHTML = '<span aria-hidden="true">🪞</span> Phòng thay đồ tự do';
+    $("brief-btn").disabled = true;
+    $("stage-bg").innerHTML = backdropSVG(backdrop);
   }
   updateTimer();
   renderStudio();
   setScreen("studio");
 }
 
-function setLook(next) {
+function setLook(next, { record = true } = {}) {
+  if (record && next !== look) {
+    history.push(look);
+    if (history.length > MAX_HISTORY) history.shift();
+  }
   look = next;
   for (const key of BODY_KEYS) bodySettings[key] = look[key];
   if (mode === "free") freeLook = look;
@@ -244,34 +269,55 @@ function setLook(next) {
 
 function renderStudio() {
   $("doll-wrap").innerHTML = dollSVG(look);
-  const tabs = [{ id: "body", name: "Ngoại hình", icon: "💄" }, ...SLOTS];
+  const tabs = [{ id: "body", name: "Trang điểm", icon: "💄" }, ...SLOTS];
   $("tabs").innerHTML = tabs.map((t) => {
     const wearing = t.id !== "body" && look.items[t.id];
-    return `<button role="tab" class="tab${t.id === tab ? " active" : ""}${wearing ? " wearing" : ""}" data-tab="${t.id}" aria-selected="${t.id === tab}" title="${t.name}"><span aria-hidden="true">${t.icon}</span><span class="tab-name">${t.name}</span></button>`;
+    const active = !searching && t.id === tab;
+    return `<button role="tab" class="tab${active ? " active" : ""}${wearing ? " wearing" : ""}" data-tab="${t.id}" aria-selected="${active}" title="${t.name}"><span aria-hidden="true">${t.icon}</span><span class="tab-name">${t.name}</span></button>`;
   }).join("");
   const walk = $("walk-btn");
   walk.disabled = !isCovered(look);
   walk.title = isCovered(look) ? "Lên sàn diễn (Enter)" : "Cần mặc áo + quần/váy hoặc một chiếc đầm";
-  if (tab === "body") renderBodyTab();
+  $("undo-btn").disabled = history.length === 0;
+  $("search-btn").classList.toggle("active", searching);
+  if (searching) renderSearch();
+  else if (tab === "body") renderBodyTab();
   else renderSlotTab();
+}
+
+/** One wardrobe card: picture, number, name, rarity hearts, worn check, lock with price. */
+function itemCard(item, index) {
+  const owned = progress.owned.includes(item.id);
+  const worn = look.items[item.slot];
+  const on = worn?.id === item.id;
+  const color = on ? worn.color : item.color;
+  const hearts = "♥".repeat(rarity(item));
+  return `<button class="item${on ? " on" : ""}${owned ? "" : " locked"}" data-item="${item.id}" aria-pressed="${on}" title="${item.name}">
+    <span class="item-num">${index + 1}</span>
+    ${on ? '<span class="item-check" aria-label="Đang mặc">✓</span>' : ""}
+    <span class="item-pic">${thumbSVG(item.id, color, look)}</span>
+    <span class="item-hearts r${rarity(item)}" aria-label="Độ hiếm ${rarity(item)}">${hearts}</span>
+    <span class="item-name">${item.name}</span>
+    <span class="item-tags" aria-hidden="true">${item.tags.map((t) => STYLES[t].icon).join("")}</span>
+    ${owned ? "" : `<span class="price">🔒 ${item.price} 🪙</span>`}
+  </button>`;
+}
+
+function renderSearch() {
+  const q = fold(query.trim());
+  const found = q ? ITEMS.filter((item) => fold(item.name).includes(q) || item.tags.some((t) => fold(STYLES[t].name).includes(q))) : [];
+  $("tab-title").innerHTML = q ? `🔍 ${found.length} kết quả` : "🔍 Gõ tên món đồ hoặc phong cách (vd: váy, dạ tiệc)";
+  $("items").innerHTML = found.length
+    ? found.map(itemCard).join("")
+    : q ? '<p class="empty">Không tìm thấy món nào. Thử từ khác nhé!</p>' : "";
+  $("swatches").innerHTML = '<span class="muted">Chọn một mục ở trên để đổi màu</span>';
 }
 
 function renderSlotTab() {
   const slot = slotById(tab);
   const worn = look.items[tab];
   $("tab-title").innerHTML = `${slot.icon} ${slot.name}${slot.required ? "" : ' <span class="muted">· chạm lần nữa để bỏ</span>'}`;
-  $("items").innerHTML = ITEMS.filter((item) => item.slot === tab).map((item) => {
-    const owned = progress.owned.includes(item.id);
-    const on = worn?.id === item.id;
-    const color = on ? worn.color : item.color;
-    const tags = item.tags.map((t) => STYLES[t].icon).join("");
-    return `<button class="item${on ? " on" : ""}${owned ? "" : " locked"}" data-item="${item.id}" aria-pressed="${on}" title="${item.name}">
-      ${thumbSVG(item.id, color, look)}
-      <span class="item-name">${item.name}</span>
-      <span class="item-tags" aria-hidden="true">${tags}</span>
-      ${owned ? "" : `<span class="price">🪙 ${item.price}</span>`}
-    </button>`;
-  }).join("");
+  $("items").innerHTML = ITEMS.filter((item) => item.slot === tab).map(itemCard).join("");
 
   if (tab === "hair") {
     $("swatches").innerHTML = HAIR_COLORS.map((h) =>
@@ -371,6 +417,97 @@ function askStylist() {
   toast(`💡 Stylist: ${text}!`, 3200);
   tab = move.slot === "lips" ? "body" : move.slot;
   setLook(applyMove(look, move));
+}
+
+// Tools ------------------------------------------------------------------------------------------------------
+
+function undo() {
+  const previous = history.pop();
+  if (!previous) return;
+  sfx.remove();
+  setLook(previous, { record: false });
+}
+
+function openSearch() {
+  searching = true;
+  query = "";
+  $("search").hidden = false;
+  $("search").value = "";
+  renderStudio();
+  $("search").focus();
+}
+
+function closeSearch() {
+  searching = false;
+  query = "";
+  $("search").hidden = true;
+}
+
+function clearAll() {
+  if (Object.keys(look.items).length <= 1) return;
+  sfx.remove();
+  setLook(createLook({ ...Object.fromEntries(BODY_KEYS.map((k) => [k, look[k]])), items: { hair: look.items.hair } }));
+  toast("Đã cởi hết đồ. Chọn áo + quần/váy hoặc một chiếc đầm nhé!");
+}
+
+function showOutfits() {
+  const cards = outfits.map((o, i) => `
+    <div class="outfit">
+      <div class="outfit-pic">${dollSVG(o.look)}</div>
+      <b>${o.name}</b>
+      <div class="outfit-buttons"><button class="btn small primary" data-wear="${i}">Mặc</button><button class="btn small ghost" data-forget="${i}" aria-label="Xóa ${o.name}">🗑</button></div>
+    </div>`).join("");
+  openPanel(`
+    <h2>👗 Bộ đồ đã lưu</h2>
+    <p class="muted">Lưu tối đa ${MAX_OUTFITS} bộ để mặc lại bằng một chạm. Món chưa mua sẽ được bỏ qua.</p>
+    <div class="outfits">${cards || '<p class="empty">Chưa có bộ nào.</p>'}</div>
+    <div class="panel-buttons">
+      <button class="btn primary" data-save-outfit ${isCovered(look) ? "" : "disabled"}>💾 Lưu bộ đang mặc</button>
+      <button class="btn ghost" data-close>Đóng</button>
+    </div>`);
+}
+
+function saveOutfit() {
+  if (!isCovered(look)) return;
+  const used = new Set(outfits.map((o) => o.name));
+  let n = 1;
+  while (used.has(`Bộ ${n}`)) n += 1;
+  const name = `Bộ ${n}`;
+  outfits = [{ name, look: { ...look } }, ...outfits].slice(0, MAX_OUTFITS);
+  save("outfits", outfits);
+  sfx.buy();
+  toast(`Đã lưu "${name}"`);
+  showOutfits();
+}
+
+function wearOutfit(index) {
+  const saved = outfits[index];
+  if (!saved) return;
+  const next = restoreLook({ items: saved.look.items }, Object.fromEntries(BODY_KEYS.map((k) => [k, look[k]])));
+  closePanel();
+  sfx.equip();
+  setLook(next);
+}
+
+function forgetOutfit(index) {
+  outfits = outfits.filter((_, i) => i !== index);
+  save("outfits", outfits);
+  showOutfits();
+}
+
+function showBackdrops() {
+  openPanel(`
+    <h2>🖼️ Chọn nền</h2>
+    <div class="backdrops">${BACKDROPS.map((b) => `<button class="backdrop-card${b.id === backdrop ? " on" : ""}" data-backdrop="${b.id}">${backdropSVG(b.id)}<span>${b.icon} ${b.name}</span></button>`).join("")}</div>
+    <div class="panel-buttons"><button class="btn ghost" data-close>Đóng</button></div>`);
+}
+
+function setBackdrop(id) {
+  backdrop = id;
+  save("backdrop", id);
+  $("stage-bg").innerHTML = backdropSVG(id);
+  sfx.color();
+  closePanel();
 }
 
 /** Random outfit from the owned wardrobe (free mode). */
@@ -560,7 +697,7 @@ function showResult() {
 
 // Photo -----------------------------------------------------------------------------------------------------
 
-async function savePhoto(photoLook, caption, colors) {
+async function savePhoto(photoLook, caption, colors, scene = backdrop, snow = false) {
   try {
     const W = 720;
     const H = 1080;
@@ -573,20 +710,26 @@ async function savePhoto(photoLook, caption, colors) {
     bg.addColorStop(1, colors[1]);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    const drawSvg = async (svg, x, y, w, h) => {
+      const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+      try {
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+        ctx.drawImage(img, x, y, w, h);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    await drawSvg(backdropSVG(scene, { snow }).replace("<svg ", `<svg width="${W}" height="${H}" `), 0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
     ctx.beginPath();
-    ctx.ellipse(W / 2, H - 120, 230, 40, 0, 0, Math.PI * 2);
+    ctx.ellipse(W / 2, H - 112, 210, 30, 0, 0, Math.PI * 2);
     ctx.fill();
-    const svg = dollSVG(photoLook).replace("<svg ", '<svg width="480" height="893" ');
-    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-    const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-      img.src = url;
-    });
-    ctx.drawImage(img, (W - 480) / 2, 90, 480, 893);
-    URL.revokeObjectURL(url);
+    await drawSvg(dollSVG(photoLook).replace("<svg ", '<svg width="440" height="942" '), (W - 440) / 2, 50, 440, 942);
     ctx.fillStyle = "rgba(40,20,40,0.78)";
     ctx.fillRect(0, H - 70, W, 70);
     ctx.fillStyle = "#ffffff";
@@ -632,6 +775,21 @@ function wire() {
   $("hint-btn").addEventListener("click", askStylist);
   $("random-btn").addEventListener("click", randomOutfit);
   $("photo-btn").addEventListener("click", () => savePhoto(look, "Phòng thay đồ", ["#ffe7ef", "#f4d7ff"]));
+  $("undo-btn").addEventListener("click", undo);
+  $("search-btn").addEventListener("click", () => {
+    sfx.tap();
+    if (searching) {
+      closeSearch();
+      renderStudio();
+    } else openSearch();
+  });
+  $("search").addEventListener("input", (e) => {
+    query = e.target.value;
+    renderSearch();
+  });
+  $("outfits-btn").addEventListener("click", () => { sfx.tap(); showOutfits(); });
+  $("backdrop-btn").addEventListener("click", () => { sfx.tap(); showBackdrops(); });
+  $("clear-btn").addEventListener("click", clearAll);
   $("runway").addEventListener("click", () => { skipRunway = true; });
 
   $("shows").addEventListener("click", (e) => {
@@ -652,6 +810,7 @@ function wire() {
     if (!t) return;
     sfx.tap();
     tab = t.dataset.tab;
+    closeSearch();
     renderStudio();
   });
 
@@ -667,7 +826,7 @@ function wire() {
     if (!el) return;
     if (el.dataset.color) {
       sfx.color();
-      setLook(recolor(look, tab, el.dataset.color));
+      setLook(recolor(look, el.dataset.slot ?? tab, el.dataset.color));
     } else onBodyOption(el);
   });
 
@@ -684,12 +843,20 @@ function wire() {
     else if (el.hasAttribute("data-retry")) startShow(lastResult.index);
     else if (el.hasAttribute("data-career")) closePanel();
     else if (el.dataset.brief) { openPanel.onClose = null; showCareer(); openBrief(Number(el.dataset.brief)); }
-    else if (el.hasAttribute("data-photo")) savePhoto(lastResult.look, `${lastResult.show.name} · ${lastResult.result.total}/30`, lastResult.show.stage);
+    else if (el.hasAttribute("data-photo")) savePhoto(lastResult.look, `${lastResult.show.name} · ${lastResult.result.total}/30`, lastResult.show.stage, SHOW_BACKDROP[lastResult.show.id], lastResult.show.id === "winter");
+    else if (el.dataset.wear) wearOutfit(Number(el.dataset.wear));
+    else if (el.dataset.forget) forgetOutfit(Number(el.dataset.forget));
+    else if (el.hasAttribute("data-save-outfit")) saveOutfit();
+    else if (el.dataset.backdrop) setBackdrop(el.dataset.backdrop);
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !$("overlay").hidden && !document.querySelector("#panel .result")) closePanel();
     else if (e.key === "Enter" && document.body.dataset.screen === "studio" && $("overlay").hidden && mode === "career") walkRunway();
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && document.body.dataset.screen === "studio") {
+      e.preventDefault();
+      undo();
+    } else if (e.target.matches?.("input")) return;
     else if (e.key === "m" || e.key === "M") toggleSound();
     else if (e.key === "n" || e.key === "N") toggleMusic();
   });

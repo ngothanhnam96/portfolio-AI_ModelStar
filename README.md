@@ -1,6 +1,6 @@
 # ✨ Model Star — Sàn Diễn Mơ Ước
 
-An original fashion styling and runway game for the browser. Dress a chibi anime model for 12 themed
+An original fashion styling and runway game for the browser. Dress a tall anime model for 12 themed
 shows, walk the catwalk under the camera flashes, and win over three judges, from
 *Người mẫu tập sự* (trainee model) to *Huyền thoại thời trang* (fashion legend).
 
@@ -23,14 +23,20 @@ in SVG by code, and the music is synthesised with WebAudio.
 5. **17 / 22 / 26 points out of 30 = 1 / 2 / 3 stars.** Stars unlock the next shows and pay
    coins; spend them on new clothes right in the wardrobe, or on a 💡 stylist tip.
 
-There is also a **free dressing room** with a random-outfit button, and every look can be saved
-as a PNG photo.
+The studio shows the model full length in an illustrated room, with a tool rail: **undo**,
+**search** (by name or style, accents optional), **saved outfits** (up to 6), **background**
+(bedroom, boutique, garden, beach, night street, photo studio), **take everything off**, the
+**stylist** tip and a **random outfit**. Wardrobe cards show each item's rarity (♥–♥♥♥♥), a check
+on what is worn and a lock with the price on what is still in the shop.
+
+There is also a **free dressing room**, and every look can be saved as a PNG photo with its
+background.
 
 ## Run it
 
 ```bash
 npm start    # http://127.0.0.1:5173
-npm test     # 49 tests, no dependencies
+npm test     # 52 tests, no dependencies
 ```
 
 Requires Node 20+. Deploys to GitHub Pages on every push to `main` (see

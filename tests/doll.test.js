@@ -27,7 +27,7 @@ test("mirror flips x across the centre line and keeps y", () => {
 
 test("the basic doll is a well-formed SVG", () => {
   const svg = dollSVG(basicLook());
-  assert.match(svg, /^<svg class="doll" viewBox="0 0 200 372"/);
+  assert.match(svg, /^<svg class="doll" viewBox="0 0 200 428"/);
   assertWellFormed(svg);
 });
 
@@ -76,4 +76,16 @@ test("thumbnails are cropped to the item's slot", () => {
     assertWellFormed(svg);
     if (item.colors) assert.ok(svg.includes(colorById(itemById(item.id).color).hex), item.id);
   }
+});
+
+test("soft shading: gradients are defined once per render, with ids unique to that picture", () => {
+  const a = dollSVG(equip(basicLook(), "dress-gown", "purple"));
+  const b = dollSVG(equip(basicLook(), "dress-gown", "purple"));
+  const ids = (svg) => [...svg.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(ids(a).length >= 3, "cloth, hair and skin gradients");
+  assert.equal(new Set(ids(a)).size, ids(a).length, "each gradient defined once");
+  assert.ok(ids(a).every((id) => !ids(b).includes(id)), "two dolls on one page never share ids");
+  for (const id of ids(a)) assert.ok(a.includes(`url(#${id})`), `${id} is used`);
+  const thumb = thumbSVG("dress-gown", "gold", basicLook());
+  assert.match(thumb, /<defs>.*<\/defs><\/svg>$/s, "thumbnail gradients live inside its <svg>");
 });

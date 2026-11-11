@@ -25,7 +25,10 @@
 
   <!-- Home -->
   <main class="screen screen-home" id="screen-home">
-    <div class="home-doll" id="home-doll"></div>
+    <div class="home-scene">
+      <div class="scene-bg" id="home-bg"></div>
+      <div class="home-doll" id="home-doll"></div>
+    </div>
     <div class="home-card">
       <p class="eyebrow">Sàn Diễn Mơ Ước</p>
       <h1>Model Star</h1>
@@ -50,26 +53,34 @@
   <!-- Studio (dressing room) -->
   <main class="screen screen-studio" id="screen-studio">
     <section class="stage" id="stage">
+      <div class="scene-bg" id="stage-bg"></div>
       <div class="stage-top">
-        <div class="theme" id="theme-label"></div>
+        <button class="theme" id="brief-btn" title="Xem lại đề bài"></button>
         <div class="timer" id="timer" role="timer" aria-label="Thời gian còn lại">
           <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
           <span id="timer-text">0:00</span>
         </div>
       </div>
       <div class="doll-wrap" id="doll-wrap"></div>
-      <div class="stage-actions">
-        <button class="btn small" id="brief-btn" title="Xem lại đề bài">📋 Đề bài</button>
-        <button class="btn small" id="hint-btn" title="Hỏi stylist">💡 Stylist <span class="cost">15🪙</span></button>
-        <button class="btn small" id="random-btn" title="Phối ngẫu nhiên">🎲 Ngẫu nhiên</button>
-        <button class="btn small" id="photo-btn" title="Lưu ảnh">📸 Ảnh</button>
-        <button class="btn primary" id="walk-btn">✨ Lên sàn diễn</button>
-      </div>
+      <nav class="tool-rail" id="tools" aria-label="Công cụ">
+        <button class="tool" data-tool="undo" id="undo-btn" title="Hoàn tác (Ctrl+Z)"><span aria-hidden="true">↶</span><small>Hoàn tác</small></button>
+        <button class="tool" data-tool="search" id="search-btn" title="Tìm món đồ"><span aria-hidden="true">🔍</span><small>Tìm</small></button>
+        <button class="tool" data-tool="outfits" id="outfits-btn" title="Bộ đồ đã lưu"><span aria-hidden="true">👗</span><small>Bộ đồ</small></button>
+        <button class="tool free-only" data-tool="backdrop" id="backdrop-btn" title="Đổi nền"><span aria-hidden="true">🖼️</span><small>Nền</small></button>
+        <button class="tool" data-tool="clear" id="clear-btn" title="Cởi hết đồ"><span aria-hidden="true">🧺</span><small>Cởi hết</small></button>
+        <button class="tool career-only" data-tool="hint" id="hint-btn" title="Hỏi stylist (15 xu)"><span aria-hidden="true">💡</span><small>Stylist</small></button>
+        <button class="tool free-only" data-tool="random" id="random-btn" title="Phối ngẫu nhiên"><span aria-hidden="true">🎲</span><small>Ngẫu nhiên</small></button>
+      </nav>
+      <button class="ready career-only" id="walk-btn">✨ Lên sàn diễn</button>
+      <button class="ready free-only" id="photo-btn">📸 Chụp ảnh</button>
     </section>
 
     <section class="wardrobe" aria-label="Tủ đồ">
       <nav class="tabs" id="tabs" role="tablist"></nav>
-      <div class="tab-title" id="tab-title"></div>
+      <div class="panel-head">
+        <div class="tab-title" id="tab-title"></div>
+        <input class="search" id="search" type="search" placeholder="Tìm món đồ…" autocomplete="off" hidden>
+      </div>
       <div class="items" id="items"></div>
       <div class="swatches" id="swatches" aria-label="Màu"></div>
     </section>

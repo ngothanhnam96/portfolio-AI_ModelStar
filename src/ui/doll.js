@@ -7,19 +7,57 @@
 import { HAIR_COLORS, LIPS, itemById } from "../core/catalog.js";
 import { colorById, shade } from "../core/palette.js";
 
-export const VIEW = "0 0 200 372";
+export const VIEW = "0 0 200 428";
 
 /**
- * Chibi proportions. Everything is drawn in one "body space" (a fashion-doll figure), then the head
- * layers (head, face, hair, hat, earrings, glasses) are scaled up around the chin and the body
- * layers (body, clothes, shoes, bag, necklace) are squashed around the neck. Clothes keep fitting
- * because they scale with the body.
+ * Tall anime proportions. Everything is drawn in one "body space" (a fashion-doll figure); the head
+ * layers (head, face, hair, hat, earrings, glasses) are scaled up a little around the chin, the
+ * body layers (body, clothes, shoes, bag, necklace) are slimmed a little around the neck. Clothes
+ * keep fitting because they scale with the body.
  */
-export const CHIBI = { head: 1.6, bodyX: 0.84, bodyY: 0.66, dy: 60 };
-const HEAD_T = `translate(100 ${104 + CHIBI.dy}) scale(${CHIBI.head}) translate(-100 -104)`;
-const BODY_T = `translate(100 ${112 + CHIBI.dy}) scale(${CHIBI.bodyX} ${CHIBI.bodyY}) translate(-100 -112)`;
+export const FIGURE = { head: 1.14, bodyX: 0.95, bodyY: 1, dy: 16 };
+const HEAD_T = `translate(100 ${104 + FIGURE.dy}) scale(${FIGURE.head}) translate(-100 -104)`;
+const BODY_T = `translate(100 ${112 + FIGURE.dy}) scale(${FIGURE.bodyX} ${FIGURE.bodyY}) translate(-100 -112)`;
 const inHead = (markup) => (markup ? `<g transform="${HEAD_T}">${markup}</g>` : "");
 const inBody = (markup) => (markup ? `<g transform="${BODY_T}">${markup}</g>` : "");
+
+// Soft shading: fills are gradients, collected per render and written into <defs>. ---------------
+
+let render = null; // { uid, defs: Map }
+
+const GRADIENTS = {
+  // Light from the upper left: lighter on the left edge, deeper on the right.
+  c: (hex) => ({ x2: 1, y2: 0.25, stops: [[0, shade(hex, 0.2)], [0.42, hex], [1, shade(hex, -0.24)]] }),
+  h: (hex) => ({ x2: 0.15, y2: 1, stops: [[0, shade(hex, 0.18)], [0.3, hex], [1, shade(hex, -0.32)]] }),
+  s: (hex) => ({ x2: 1, y2: 0, stops: [[0, shade(hex, 0.08)], [0.55, hex], [1, shade(hex, -0.12)]] }),
+};
+
+/** A gradient fill for `hex` (kind c = cloth, h = hair, s = skin), or the flat colour outside a render. */
+function fill(hex, kind = "c") {
+  if (!render) return hex;
+  const id = `${render.uid}-${kind}${hex.slice(1)}`;
+  if (!render.defs.has(id)) {
+    const g = GRADIENTS[kind](hex);
+    const stops = g.stops.map(([o, color]) => `<stop offset="${o}" stop-color="${color}"/>`).join("");
+    render.defs.set(id, `<linearGradient id="${id}" x1="0" y1="0" x2="${g.x2}" y2="${g.y2}">${stops}</linearGradient>`);
+  }
+  return `url(#${id})`;
+}
+
+/** Run `draw` with a fresh gradient registry and append the <defs> it needed. */
+function withDefs(uid, draw) {
+  const outer = render;
+  render = { uid, defs: new Map() };
+  try {
+    const markup = draw();
+    return markup + (render.defs.size ? `<defs>${[...render.defs.values()].join("")}</defs>` : "");
+  } finally {
+    render = outer;
+  }
+}
+
+let renders = 0;
+const nextUid = () => `ms${(renders += 1)}`;
 
 /** Mirror an absolute path (M/L/Q/C/Z with x,y pairs) across x = 100. */
 export function mirror(d) {
@@ -55,7 +93,7 @@ const outline = (c) => `stroke="${shade(c, -0.35)}" stroke-width="1.1" stroke-li
 
 /** Shapes and colours shared by many items. */
 function palette(hex) {
-  return { c: hex, d: shade(hex, -0.2), l: shade(hex, 0.3), o: outline(hex) };
+  return { c: fill(hex), hex, d: shade(hex, -0.2), l: shade(hex, 0.3), o: outline(hex) };
 }
 
 // Body -----------------------------------------------------------------------------------------
@@ -73,19 +111,20 @@ function body(look) {
 }
 
 function bodySkin(look) {
-  const s = look.skin;
-  const sd = shade(s, -0.14);
-  const o = `stroke="${shade(s, -0.3)}" stroke-width="0.9"`;
+  const hex = look.skin;
+  const s = fill(hex, "s");
+  const sd = shade(hex, -0.16);
+  const o = `stroke="${shade(hex, -0.3)}" stroke-width="0.8"`;
   return [
     both(BODY.leg, s, o),
-    ellipse(88, 390, 8, 5, s, o),
-    ellipse(112, 390, 8, 5, s, o),
+    lines("M86 296 Q 89 300 92 297", sd, 0.7, 'opacity="0.7"'),
+    both("M80 384 Q 79 392 82 396 L 95 396 Q 97 390 94 384 Z", s, o),
     both(BODY.arm, s, o),
-    ellipse(54, 234, 5, 7, s, o),
-    ellipse(146, 234, 5, 7, s, o),
+    both("M50 228 Q 47 236 51 242 Q 55 246 58 240 L 58 230 Z", s, o),
     path(BODY.torso, s, o),
     path(BODY.neck, s, o),
     path("M92 104 Q 100 112 108 104 L 108 112 Q 100 116 92 112 Z", sd, 'opacity="0.5"'),
+    lines("M86 121 Q 92 123 97 121", sd, 0.6, 'opacity="0.6"'),
   ].join("");
 }
 
@@ -93,9 +132,12 @@ function bodySkin(look) {
 const FACE = "M75 66 Q 75 41 100 41 Q 125 41 125 66 Q 125 86 112 95 Q 100 102 88 95 Q 75 86 75 66 Z";
 
 function headSkin(look) {
-  const s = look.skin;
-  const o = `stroke="${shade(s, -0.3)}" stroke-width="0.8"`;
-  return ellipse(75.5, 76, 3.5, 5.5, s, o) + ellipse(124.5, 76, 3.5, 5.5, s, o) + path(FACE, s, o);
+  const hex = look.skin;
+  const s = fill(hex, "s");
+  const o = `stroke="${shade(hex, -0.3)}" stroke-width="0.7"`;
+  return ellipse(75.5, 76, 3.5, 5.5, s, o) + ellipse(124.5, 76, 3.5, 5.5, s, o) + path(FACE, s, o) +
+    // Shadow cast by the bangs across the forehead
+    path("M76 58 Q 100 70 124 58 L 125 66 Q 100 78 75 66 Z", shade(hex, -0.14), 'opacity="0.45"');
 }
 
 /** Plain slip and shorts, always under the clothes, so the doll is never bare. */
@@ -144,56 +186,91 @@ function hairHex(look) {
 }
 
 // Hair -------------------------------------------------------------------------------------------
+// Anime hair: a back mass with pointed strand tips, spiky bangs, face-framing locks, darker strand
+// lines and a glossy "halo" highlight across the crown.
 
-const CAP = "M73 76 Q 70 38 100 37 Q 130 38 127 76 Q 122 54 100 52 Q 78 54 73 76 Z";
+const CROWN = "M70 74 Q 66 30 100 30 Q 134 30 130 74 Z";
+const BANGS = "M72 80 Q 70 36 100 35 Q 130 36 128 80 L 125 66 L 119 73 L 116 58 L 110 70 L 104 56 L 98 71 L 92 57 L 86 70 L 82 59 L 77 72 Z";
+const PARTED = "M72 80 Q 70 36 100 35 Q 130 36 128 80 L 125 66 L 119 72 L 114 58 L 108 68 L 101 49 L 99 49 L 92 68 L 86 58 L 81 72 L 75 66 Z";
+const SWEPT = "M72 78 Q 68 36 100 35 Q 130 36 128 76 L 124 62 Q 118 52 106 50 L 108 60 Q 96 54 88 62 L 90 56 Q 80 62 76 72 Z";
+
+function shine(h) {
+  return path("M78 47 Q 100 37 122 47 L 120 50 Q 100 42 80 51 Z", "#ffffff", 'opacity="0.38"') +
+    line("M84 44 L 86 40 M110 40 L 113 43", "#ffffff", 0.9, 'opacity="0.5"') +
+    lines("M90 38 Q 86 48 85 62", h.d, 0.7, 'opacity="0.55"');
+}
+
+/** A long tapered lock hanging from (x, y) down to `to` (left side of the face). */
+function lockD(x, y, to, width = 6) {
+  return `M${x} ${y} Q ${x - 6} ${(y + to) / 2} ${x - 2} ${to} L ${x + 2} ${to - 10} L ${x + 3} ${to - 2} Q ${x + width} ${(y + to) / 2} ${x + width} ${y + 4} Z`;
+}
+
+function locks(h, x, y, to, width = 6) {
+  return both(lockD(x, y, to, width), h.c, h.o);
+}
 
 const HAIR = {
   "hair-long": (h) => ({
-    back: path("M72 66 Q 70 34 100 34 Q 130 34 128 66 L 133 150 Q 118 157 100 153 Q 82 157 67 150 Z", h.c, h.o),
-    front:
-      path("M73 78 Q 70 38 100 37 Q 130 38 127 78 Q 126 58 116 50 Q 100 62 80 58 Q 76 66 73 78 Z", h.c, h.o) +
-      both("M75 70 Q 69 102 73 130 L 82 126 Q 79 100 81 78 Z", h.c, h.o) +
-      line("M104 42 Q 112 46 118 52", h.l, 1.4),
+    back:
+      path("M70 70 Q 66 30 100 30 Q 134 30 130 70 Q 136 140 138 230 L 130 220 L 126 238 L 118 224 L 112 240 L 106 226 L 100 242 L 94 226 L 88 240 L 82 224 L 74 238 L 70 220 L 62 230 Q 64 140 70 70 Z", h.c, h.o) +
+      lines("M80 96 Q 74 160 78 226", h.d, 0.8, 'opacity="0.6"') + lines("M90 110 Q 88 170 90 232", h.d, 0.7, 'opacity="0.5"'),
+    front: path(BANGS, h.c, h.o) + locks(h, 74, 64, 172, 7) + shine(h),
   }),
   "hair-pony": (h) => ({
-    back: path("M116 46 Q 151 54 147 100 Q 145 124 134 140 Q 137 104 122 66 Z", h.c, h.o),
-    front: path(CAP, h.c, h.o) + circle(121, 48, 4, "#ff6f91") + line("M86 44 Q 98 40 110 42", h.l, 1.4),
+    back:
+      path(CROWN, h.c, h.o) +
+      path("M112 40 Q 152 38 152 92 Q 154 144 140 196 L 136 180 L 128 200 Q 138 142 130 98 Q 126 66 112 52 Z", h.c, h.o) +
+      line("M134 62 Q 146 110 136 182", h.d, 0.8, 'opacity="0.6"'),
+    front:
+      path(BANGS, h.c, h.o) + locks(h, 74, 64, 112, 5) + shine(h) +
+      path("M112 36 L 122 30 L 122 42 Z", "#ff6f91") + path("M120 36 L 130 30 L 130 42 Z", "#ff6f91") + circle(121, 36, 2.6, "#e2496f"),
   }),
   "hair-bob": (h) => ({
-    back: path("M71 70 Q 68 34 100 34 Q 132 34 129 70 L 131 104 Q 118 108 114 100 L 86 100 Q 82 108 69 104 Z", h.c, h.o),
-    front: path("M73 74 Q 70 37 100 37 Q 130 37 127 74 L 125 62 Q 100 57 75 62 Z", h.c, h.o) + line("M84 44 Q 100 40 116 44", h.l, 1.4),
+    back: path("M68 72 Q 64 30 100 30 Q 136 30 132 72 Q 134 100 130 114 L 124 104 L 120 116 L 113 104 L 87 104 L 80 116 L 76 104 L 70 114 Q 66 100 68 72 Z", h.c, h.o),
+    front:
+      path("M72 76 Q 70 35 100 35 Q 130 35 128 76 L 126 62 L 121 66 L 118 60 L 110 65 L 104 59 L 96 65 L 90 59 L 83 65 L 79 60 L 74 64 Z", h.c, h.o) +
+      both("M73 62 Q 69 88 73 108 L 78 100 L 81 106 Q 79 84 80 66 Z", h.c, h.o) + shine(h),
   }),
   "hair-twin": (h) => ({
-    back: both("M78 54 Q 49 70 53 124 Q 59 135 67 124 Q 64 92 82 66 Z", h.c, h.o),
+    back:
+      path(CROWN, h.c, h.o) +
+      both("M80 50 Q 48 58 46 112 Q 44 164 56 206 L 60 192 L 67 208 Q 59 156 64 112 Q 68 78 84 62 Z", h.c, h.o) +
+      lines("M64 80 Q 52 130 60 196", h.d, 0.8, 'opacity="0.6"'),
     front:
-      path("M73 76 Q 70 38 100 37 Q 130 38 127 76 Q 120 52 100 50 Q 80 52 73 76 Z", h.c, h.o) +
-      line("M100 38 L 100 50", h.d, 1.2) +
-      circle(77, 58, 4.5, "#ff6f91") + circle(123, 58, 4.5, "#ff6f91"),
+      path(PARTED, h.c, h.o) + locks(h, 74, 64, 100, 5) + shine(h) +
+      both("M80 50 L 70 42 L 70 58 Z", "#ff6f91") + both("M80 50 L 88 42 L 88 58 Z", "#ff6f91") +
+      circle(80, 50, 2.6, "#e2496f") + circle(120, 50, 2.6, "#e2496f"),
   }),
   "hair-bun": (h) => ({
-    back: circle(100, 32, 15, h.c, h.o) + path("M72 70 Q 70 36 100 36 Q 130 36 128 70 Z", h.c, h.o),
+    back:
+      circle(100, 26, 16, h.c, h.o) + line("M90 20 Q 100 12 110 22 Q 104 30 94 28", h.d, 0.9) + path(CROWN, h.c, h.o),
     front:
-      path("M73 74 Q 70 38 100 37 Q 130 38 127 74 Q 118 50 100 50 Q 82 50 73 74 Z", h.c, h.o) +
-      lines("M80 60 Q 88 46 100 44", h.d, 1) +
-      line("M110 22 L 122 28", "#d6ab48", 2) + circle(123, 28, 2.2, "#e03a4b"),
+      path(SWEPT, h.c, h.o) +
+      both("M75 66 Q 72 86 76 104 Q 78 88 79 70 Z", h.c, h.o) + shine(h) +
+      line("M108 12 L 124 20", "#d6ab48", 2) + circle(125, 20, 2.4, "#e03a4b") + circle(121, 18, 1.4, "#ffffff"),
   }),
   "hair-curly": (h) => ({
-    back: [
-      [72, 60, 16], [128, 60, 16], [66, 88, 15], [134, 88, 15], [70, 112, 13], [130, 112, 13],
-      [100, 38, 20], [80, 40, 16], [120, 40, 16],
-    ].map(([x, y, r]) => circle(x, y, r, h.c, h.o)).join(""),
-    front: [[84, 47, 10], [100, 44, 11], [116, 47, 10], [76, 58, 8], [124, 58, 8]]
-      .map(([x, y, r]) => circle(x, y, r, h.c, h.o)).join("") + line("M94 40 Q 100 37 106 40", h.l, 1.4),
+    back:
+      path("M68 70 Q 60 30 100 28 Q 140 30 132 70 Q 146 90 136 110 Q 150 130 136 150 Q 146 172 128 182 Q 114 192 100 184 Q 86 192 72 182 Q 54 172 64 150 Q 50 130 64 110 Q 54 90 68 70 Z", h.c, h.o) +
+      lines("M66 104 Q 74 112 66 120 M64 142 Q 72 150 64 158 M80 168 Q 86 176 80 182", h.d, 0.9, 'opacity="0.65"'),
+    front:
+      path("M72 80 Q 66 36 100 34 Q 134 36 128 80 Q 130 68 122 64 Q 120 72 112 66 Q 110 58 100 60 Q 92 58 88 66 Q 80 72 78 64 Q 70 68 72 80 Z", h.c, h.o) +
+      both("M73 66 Q 64 84 72 100 Q 66 112 74 124 Q 78 110 74 100 Q 82 86 77 70 Z", h.c, h.o) + shine(h),
   }),
   "hair-braid": (h) => {
     let braid = "";
-    for (let i = 0; i < 5; i += 1) {
-      braid += ellipse(78 + (i % 2 ? 3 : 0) + i * 0.6, 96 + i * 13, 7, 9, h.c, h.o);
+    for (let i = 0; i < 7; i += 1) {
+      const x = 79 + (i % 2 ? 3 : 0) + i * 0.8;
+      const y = 98 + i * 13;
+      braid += ellipse(x, y, 7.4 - i * 0.35, 9, h.c, h.o) + line(`M${x - 5} ${y - 3} Q ${x} ${y + 3} ${x + 5} ${y - 3}`, h.d, 0.7);
     }
     return {
-      back: path("M72 70 Q 70 36 100 36 Q 130 36 128 70 Z", h.c, h.o),
-      front: path("M73 78 Q 70 38 100 37 Q 130 38 127 70 Q 116 50 96 52 Q 80 58 73 78 Z", h.c, h.o) +
-        braid + circle(81.5, 160, 3.5, "#ff6f91"),
+      back: path(CROWN, h.c, h.o) + path("M70 70 Q 72 92 80 96 L 86 80 Z", h.c, h.o),
+      front:
+        path(SWEPT, h.c, h.o) + braid +
+        path("M78 190 L 79 204 L 83 198 L 86 206 L 90 190 Z", h.c, h.o) +
+        path("M80 186 L 72 180 L 72 192 Z", "#ff6f91") + path("M88 186 L 96 180 L 96 192 Z", "#ff6f91") + circle(84, 186, 2.4, "#e2496f") +
+        path(mirror(lockD(74, 62, 104, 5)), h.c, h.o) + shine(h),
     };
   },
 };
@@ -331,8 +408,8 @@ const ART = {
   "shoes-flat": ({ c, d, o }) =>
     both("M80 384 L 96 384 Q 99 392 97 398 L 79 398 Q 77 392 80 384 Z", c, o) +
     both("M85 385 L 88 388 L 91 385 L 88 386 Z", d) + circle(88, 386.5, 1.4, d) + circle(112, 386.5, 1.4, d),
-  "shoes-sandal": ({ c, d }) =>
-    lines("M81 387 L 95 387", c, 3) + lines("M80 393 L 96 393", c, 3) +
+  "shoes-sandal": ({ hex, d }) =>
+    lines("M81 387 L 95 387", hex, 3) + lines("M80 393 L 96 393", hex, 3) +
     both("M78 397 L 98 397 L 98 401 L 78 401 Z", d),
   "shoes-boot": ({ c, d, l, o }) =>
     both("M78 326 L 97 326 L 97 384 Q 99 392 98 398 L 77 398 Q 75 390 79 380 Z", c, o) +
@@ -340,9 +417,9 @@ const ART = {
   "shoes-heel": ({ c, d, l, o }) =>
     both("M81 380 L 95 380 Q 98 389 95 396 L 81 396 Q 78 389 81 380 Z", c, o) +
     lines("M86 396 L 87 405", d, 2.4) + lines("M84 384 Q 88 382 92 384", l, 1),
-  "shoes-glass": ({ c, o }) =>
+  "shoes-glass": ({ c, hex, o }) =>
     both("M81 380 L 95 380 Q 98 389 95 396 L 81 396 Q 78 389 81 380 Z", c, `${o} opacity="0.75"`) +
-    lines("M86 396 L 87 405", c, 2.4) + sparkle(84, 386, 2.4, "#ffffff") + sparkle(116, 386, 2.4, "#ffffff"),
+    lines("M86 396 L 87 405", hex, 2.4) + sparkle(84, 386, 2.4, "#ffffff") + sparkle(116, 386, 2.4, "#ffffff"),
 
   // Bags
   "bag-backpack": ({ c, d, l, o }) => ({
@@ -395,7 +472,7 @@ const ART = {
 
   // Jewellery
   "ear-stud": ({ c, o }) => circle(75, 84, 2.4, c, o) + circle(125, 84, 2.4, c, o),
-  "ear-hoop": ({ c }) => `<circle cx="75" cy="89" r="6" fill="none" stroke="${c}" stroke-width="1.8"/><circle cx="125" cy="89" r="6" fill="none" stroke="${c}" stroke-width="1.8"/>`,
+  "ear-hoop": ({ hex }) => `<circle cx="75" cy="89" r="6" fill="none" stroke="${hex}" stroke-width="1.8"/><circle cx="125" cy="89" r="6" fill="none" stroke="${hex}" stroke-width="1.8"/>`,
   "ear-pearl": ({ c, o }) =>
     lines("M75 82 L 75 88", "#d6ab48", 1) + circle(75, 91, 3.3, c, o) + circle(125, 91, 3.3, c, o) +
     circle(74, 90, 1, "#ffffff") + circle(124, 90, 1, "#ffffff"),
@@ -420,15 +497,15 @@ const ART = {
   },
 
   // Glasses
-  "glass-sun": ({ c, l, o }) =>
+  "glass-sun": ({ c, hex, l, o }) =>
     `<rect x="81" y="70" width="17" height="12" rx="5" fill="${c}" ${o} opacity="0.92"/><rect x="102" y="70" width="17" height="12" rx="5" fill="${c}" ${o} opacity="0.92"/>` +
-    line("M98 74 L 102 74", c, 1.6) + lines("M84 73 L 89 72", l, 1.2) + lines("M81 74 L 76 73", c, 1.4),
-  "glass-cat": ({ c, l, o }) =>
+    line("M98 74 L 102 74", hex, 1.6) + lines("M84 73 L 89 72", l, 1.2) + lines("M81 74 L 76 73", hex, 1.4),
+  "glass-cat": ({ c, hex, l, o }) =>
     both("M81 72 L 98 73 L 97 80 Q 90 84 84 80 Q 81 77 79 69 Z", c, `${o} fill-opacity="0.85"`) +
-    line("M98 75 L 102 75", c, 1.6) + lines("M84 75 L 90 75", l, 1.2),
-  "glass-round": ({ c }) =>
-    `<circle cx="90" cy="77" r="7.5" fill="#ffffff" fill-opacity="0.15" stroke="${c}" stroke-width="1.6"/><circle cx="110" cy="77" r="7.5" fill="#ffffff" fill-opacity="0.15" stroke="${c}" stroke-width="1.6"/>` +
-    line("M97.5 76 Q 100 74 102.5 76", c, 1.4) + lines("M82.5 76 L 76 74", c, 1.4),
+    line("M98 75 L 102 75", hex, 1.6) + lines("M84 75 L 90 75", l, 1.2),
+  "glass-round": ({ hex }) =>
+    `<circle cx="90" cy="77" r="7.5" fill="#ffffff" fill-opacity="0.15" stroke="${hex}" stroke-width="1.6"/><circle cx="110" cy="77" r="7.5" fill="#ffffff" fill-opacity="0.15" stroke="${hex}" stroke-width="1.6"/>` +
+    line("M97.5 76 Q 100 74 102.5 76", hex, 1.4) + lines("M82.5 76 L 76 74", hex, 1.4),
 };
 
 /** Open-fronted jacket: two panels from the collar to `hem`, long sleeves. */
@@ -452,7 +529,7 @@ function itemParts(entry, look) {
   const item = itemById(entry.id);
   if (item.slot === "hair") {
     const hex = hairHex(look);
-    const art = HAIR[item.id]({ c: hex, d: shade(hex, -0.3), l: shade(hex, 0.25), o: outline(hex) });
+    const art = HAIR[item.id]({ c: fill(hex, "h"), hex, d: shade(hex, -0.3), l: shade(hex, 0.25), o: outline(hex) });
     return art;
   }
   const hex = colorById(entry.color ?? item.color).hex;
@@ -460,8 +537,12 @@ function itemParts(entry, look) {
   return typeof art === "string" ? { back: "", front: art } : art;
 }
 
-/** Inner SVG markup of the dressed doll, layered back to front. */
-export function dollMarkup(look) {
+/** Inner SVG markup of the dressed doll, layered back to front, with its gradient <defs>. */
+export function dollMarkup(look, uid = "d") {
+  return withDefs(uid, () => layers(look));
+}
+
+function layers(look) {
   const parts = Object.fromEntries(
     ["hair", "top", "bottom", "dress", "outer", "shoes", "bag", "hat", "earrings", "necklace", "glasses"].map((slot) => [slot, itemParts(look.items[slot], look)]),
   );
@@ -486,7 +567,7 @@ export function dollMarkup(look) {
 }
 
 export function dollSVG(look, { className = "doll", viewBox = VIEW } = {}) {
-  return `<svg class="${className}" viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Người mẫu">${dollMarkup(look)}</svg>`;
+  return `<svg class="${className}" viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Người mẫu">${dollMarkup(look, nextUid())}</svg>`;
 }
 
 /** Where each slot sits on the body, for the wardrobe thumbnails. */
@@ -506,6 +587,10 @@ export const THUMB_VIEW = {
 
 /** A wardrobe button picture: the item on a faint silhouette, cropped to its slot. */
 export function thumbSVG(itemId, color, look) {
+  return withDefs(nextUid(), () => thumbBody(itemId, color, look)).replace(/^([\s\S]*?)(<defs>[\s\S]*<\/defs>)$/, (_, svg, defs) => svg.replace("</svg>", `${defs}</svg>`));
+}
+
+function thumbBody(itemId, color, look) {
   const item = itemById(itemId);
   const entry = { id: itemId, color: item.colors ? color ?? item.color : null };
   const { back, front } = itemParts(entry, look);

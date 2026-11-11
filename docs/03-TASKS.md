@@ -16,7 +16,10 @@
 | T-10 | Free dressing room, random outfit, PNG photo | FR-10, FR-11 | ✅ |
 | T-11 | WebAudio sounds and 3 music loops | — | ✅ |
 | T-12 | Persistence, CI, GitHub Pages | FR-12, NFR-1 | ✅ |
-| T-17 | Chibi / anime model: big head, anime eyes, short body (scaled layers) | NFR-2 | ✅ |
+| T-17 | Chibi / anime model: big head, anime eyes, short body (scaled layers) | NFR-2 | ✅ (replaced by T-18) |
+| T-18 | Tall anime model: slim proportions, anime hair with strands and gloss, gradient shading | NFR-2 | ✅ |
+| T-19 | Illustrated backgrounds (6 scenes), per-show scene, background picker, photos on the scene | — | ✅ |
+| T-20 | Studio UX: tool rail (undo, search, saved outfits, background, take everything off), item cards with rarity hearts and worn check | — | ✅ |
 | T-13 | Daily challenge (seeded random theme) | — | ⏭ |
 | T-14 | Saved looks gallery | — | ⏭ |
 | T-15 | Patterns (stripes, polka dots, florals) as a second colour choice | — | ⏭ |

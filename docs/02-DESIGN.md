@@ -72,12 +72,32 @@ better. The game sells it as a tip; the tests use it to prove every show can be 
 
 ## Art
 
-- **Chibi / anime style**: a big head with large sparkly anime eyes (layered iris, two
-  highlights, lash flick, blush strokes) on a short body.
+- **Tall anime style**: slim fashion proportions, large sparkly anime eyes (layered iris, two
+  highlights, lash flick, blush strokes), the bangs' shadow on the forehead, and anime hair:
+  a back mass with pointed strand tips, spiky bangs, face-framing locks, strand lines and a glossy
+  halo highlight.
+- **Soft shading**: clothes, hair and skin are filled with linear gradients (light from the upper
+  left). Each render collects the gradients it needs into its own `<defs>` with ids unique to
+  that picture, so dozens of dolls and thumbnails can share a page. Strokes use the flat colour
+  (a gradient on a zero-height line would not render).
 - Everything is drawn in one "body space" (a fashion-doll figure, 200 × 420, centre x = 100), then
-  the head layers (head, face, hair, hat, earrings, glasses) are scaled × 1.6 around the chin and
-  the body layers (body, clothes, shoes, bag, necklace) are squashed × 0.84 / 0.66 around the
-  neck. Clothes keep fitting because they scale with the body. Final viewBox 200 × 372.
+  the head layers (head, face, hair, hat, earrings, glasses) are scaled × 1.14 around the chin and
+  the body layers (body, clothes, shoes, bag, necklace) are slimmed × 0.95 around the neck.
+  Clothes keep fitting because they scale with the body. Final viewBox 200 × 428.
+- **Backgrounds** (`src/ui/backdrops.js`): six illustrated scenes (bedroom, boutique, garden,
+  beach, night street, photo studio), SVG 400 × 300 cropped to fill. Each show has its own; the
+  free room lets the player choose; photos are drawn on top of the chosen scene.
+
+## Studio UX
+
+- The stage shows the model full length in the scene; a tool rail on the right holds undo
+  (also Ctrl+Z, 40 steps), search (diacritics-insensitive, by item name or style), saved outfits
+  (6, re-validated against the wardrobe when worn or loaded), background (free room), take
+  everything off, the stylist tip (career) and random outfit (free room). The big pill button walks
+  the runway (career) or takes a photo (free room).
+- The wardrobe has two rows of category tabs (a green dot marks a worn slot) and a grid of cards:
+  number, picture, rarity hearts by price (free ♥, ≤ 70 ♥♥, ≤ 130 ♥♥♥, more ♥♥♥♥), name, style
+  icons, a check on the worn item, a lock with the price on items still in the shop.
 - Left-side shapes are written once and mirrored (`mirror()` flips x in M/L/Q/C paths).
 - Layers: bag (back) → hair (back) → body → face → plain slip → [shoes under floor-length
   clothes] → bottom → shoes → top → dress → outerwear → necklace → bag → hair (front) → earrings →
